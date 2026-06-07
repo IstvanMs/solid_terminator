@@ -1,0 +1,25 @@
+plugins:
+  - rubocop-rspec
+
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.1
+  Exclude:
+    - "vendor/**/*"
+    - "bin/**/*"
+    - "lib/generators/**/templates/**/*"
+
+Style/Documentation:
+  Enabled: false
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+
+RSpec/ExampleLength:
+  Max: 20
+
+Lint/InheritException:
+  Exclude:
+    - 'lib/solid_terminator/job_cancelled.rb'
+
