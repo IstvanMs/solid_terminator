@@ -6,6 +6,9 @@ module SolidTerminator
 
     included do
       around_perform :with_termination_handling
+      # rescue_from rather than rescuing in around_perform: perform_now then returns normally, so
+      # SolidQueue marks the job finished, and after_perform callbacks from parent classes do not run.
+      rescue_from(JobTerminated) { |error| handle_job_terminated(error) }
     end
 
     private
@@ -15,24 +18,15 @@ module SolidTerminator
       st_logger.debug("Job #{job_id} registered for termination monitoring")
       ThreadRegistry.register(job_id)
       yield
-    rescue JobTerminated => e
-      on_job_terminated(current_thread, e)
     ensure
       ThreadRegistry.deregister(job_id, current_thread)
       st_logger.debug("Job #{job_id} deregistered from termination monitoring")
       cleanup_termination_row
     end
 
-    def on_job_terminated(current_thread, error)
-      # Deregister before cleanup so the monitor does not re-raise mid-cleanup.
-      ThreadRegistry.deregister(job_id, current_thread)
-      handle_job_terminated(error)
-    end
-
     def handle_job_terminated(error)
       st_logger.info("Job #{job_id} terminated: #{error.message}")
       SolidQueue::TerminatedExecution.record_termination(self)
-      raise
     end
 
     def cleanup_termination_row

@@ -1,0 +1,12 @@
+# frozen_string_literal: true
+
+# Used by CI to test against specific Rails / solid_queue versions.
+# BUNDLE_GEMFILE=gemfiles/ci.gemfile RAILS_VERSION='~> 8.0.0' SOLID_QUEUE_VERSION='~> 1.7' bundle install
+
+eval_gemfile '../Gemfile'
+
+gem 'rails',       ENV.fetch('RAILS_VERSION', '>= 7.1')
+gem 'solid_queue', ENV.fetch('SOLID_QUEUE_VERSION', '>= 1.0')
+# Matrix rows without a json pin still export JSON_VERSION, as an empty string.
+json_version = ENV.fetch('JSON_VERSION', '')
+gem 'json', json_version unless json_version.empty?

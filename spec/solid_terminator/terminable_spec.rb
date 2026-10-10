@@ -7,6 +7,9 @@ class TerminableTestJob < ActiveJob::Base
 
   queue_as :default
   attr_writer :work
+  attr_reader :after_performed
+
+  after_perform { @after_performed = true }
 
   def perform
     @work&.call
@@ -17,15 +20,9 @@ RSpec.describe SolidTerminator::Terminable do
   let(:job)    { TerminableTestJob.new }
   let(:job_id) { job.job_id }
 
-  def run_job(job)
-    job.perform_now
-  rescue SolidTerminator::JobTerminated
-    nil
-  end
-
   describe 'thread registry' do
     it 'deregisters after successful perform' do
-      run_job(job)
+      job.perform_now
       expect(SolidTerminator::ThreadRegistry.thread_for(job_id)).to be_nil
     end
 
@@ -53,22 +50,27 @@ RSpec.describe SolidTerminator::Terminable do
 
     before { job.work = -> { raise SolidTerminator::JobTerminated } }
 
-    it 're-raises JobTerminated after recording' do
-      expect { job.perform_now }.to raise_error(SolidTerminator::JobTerminated)
+    it 'does not raise, so the queue marks the job finished' do
+      expect { job.perform_now }.not_to raise_error
+    end
+
+    it 'does not run after_perform callbacks' do
+      job.perform_now
+      expect(job.after_performed).to be_nil
     end
 
     it 'deregisters after termination' do
-      run_job(job)
+      job.perform_now
       expect(SolidTerminator::ThreadRegistry.thread_for(job_id)).to be_nil
     end
 
     it 'creates a TerminatedExecution record' do
-      run_job(job)
+      job.perform_now
       expect(SolidQueue::TerminatedExecution.find_by(job_id: sq_job.id)).not_to be_nil
     end
 
     it 'stores the correct queue_name on the TerminatedExecution record' do
-      run_job(job)
+      job.perform_now
       record = SolidQueue::TerminatedExecution.find_by(job_id: sq_job.id)
       expect(record.queue_name).to eq('default')
     end
@@ -77,7 +79,7 @@ RSpec.describe SolidTerminator::Terminable do
   describe 'termination row cleanup' do
     it 'deletes termination row after normal completion' do
       SolidTerminator::Termination.create!(active_job_id: job_id)
-      run_job(job)
+      job.perform_now
       expect(SolidTerminator::Termination.exists?(active_job_id: job_id)).to be(false)
     end
 
@@ -90,14 +92,8 @@ RSpec.describe SolidTerminator::Terminable do
 
     it 'deletes termination row after termination' do
       SolidTerminator::Termination.create!(active_job_id: job_id)
-      SolidQueue::Job.create!(
-        active_job_id: job_id,
-        class_name: 'TerminableTestJob',
-        queue_name: 'default',
-        priority: 0
-      )
       job.work = -> { raise SolidTerminator::JobTerminated }
-      run_job(job)
+      job.perform_now
       expect(SolidTerminator::Termination.exists?(active_job_id: job_id)).to be(false)
     end
   end

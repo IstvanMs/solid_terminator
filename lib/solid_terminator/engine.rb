@@ -7,8 +7,6 @@ module SolidTerminator
     config.to_prepare do
       require 'solid_terminator/termination'
       require 'solid_terminator/terminated_execution'
-      require 'solid_terminator/claimed_execution_patch'
-      SolidQueue::ClaimedExecution.prepend(SolidTerminator::ClaimedExecutionPatch)
     end
 
     config.after_initialize do

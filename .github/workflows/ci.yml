@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rubocop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+      - run: bundle exec rubocop
+
+  test:
+    name: Ruby ${{ matrix.ruby }} / Rails ${{ matrix.rails }} / solid_queue ${{ matrix.solid_queue }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # json 3 removed the quirks_mode option that Rails 7.1 and 8.0 still pass when encoding.
+        include:
+          # Oldest supported versions.
+          - { ruby: '3.1', rails: '~> 7.1.0', solid_queue: '~> 1.0.0', json: '< 3' }
+          # Last solid_queue before 1.5 moved unblocking into ClaimedExecution#finalize.
+          - { ruby: '3.2', rails: '~> 7.2.0', solid_queue: '~> 1.4.0' }
+          - { ruby: '3.3', rails: '~> 8.0.0', solid_queue: '>= 1.5', json: '< 3' }
+          - { ruby: '3.4', rails: '~> 8.1.0', solid_queue: '>= 1.5' }
+    env:
+      BUNDLE_GEMFILE: gemfiles/ci.gemfile
+      RAILS_VERSION: ${{ matrix.rails }}
+      SOLID_QUEUE_VERSION: ${{ matrix.solid_queue }}
+      JSON_VERSION: ${{ matrix.json }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - run: bundle exec rspec
+      - run: bundle exec rspec integration
+      - run: bundle exec ruby bin/test_termination
