@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-10
+
 ### Upgrading
 
 Run `bin/rails generate solid_terminator:update` and migrate. This adds the `arguments` column to `solid_queue_terminated_executions`.
