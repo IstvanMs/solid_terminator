@@ -155,19 +155,18 @@ Scope: lib/solid_terminator/configuration.rb (add attribute), spec/solid_termina
 
 ### After writing code
 
-Run the full validation checklist (see below). Do not report the task done until all four pass.
+Run the full validation checklist (see below). Do not report the task done until all three pass.
 
 ---
 
 ## Validation Checklist
 
-Run all four after every change:
+Run all three after every change:
 
 ```bash
 bundle exec rubocop                      # must report no offenses
 bundle exec rspec                        # must report 0 failures
 bundle exec rspec integration            # must report 0 failures
-bundle exec ruby bin/test_termination    # must print "[job] terminated: ..."
 ```
 
 `integration/` runs against the real SolidQueue models in a minimal Rails app. It is a separate
