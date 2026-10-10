@@ -33,7 +33,7 @@ RSpec.describe SolidTerminator::Terminable do
 
     it 'deregisters even when perform raises' do
       job.work = -> { raise 'boom' }
-      job.perform_now rescue nil # rubocop:disable Style/RescueModifier
+      suppress(RuntimeError) { job.perform_now }
       expect(SolidTerminator::ThreadRegistry.thread_for(job_id)).to be_nil
     end
   end
@@ -123,7 +123,7 @@ RSpec.describe SolidTerminator::Terminable do
     it 'deletes termination row after error' do
       SolidTerminator::Termination.create!(active_job_id: job_id)
       job.work = -> { raise 'boom' }
-      job.perform_now rescue nil # rubocop:disable Style/RescueModifier
+      suppress(RuntimeError) { job.perform_now }
       expect(SolidTerminator::Termination.exists?(active_job_id: job_id)).to be(false)
     end
 

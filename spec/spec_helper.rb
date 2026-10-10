@@ -3,6 +3,7 @@
 require 'active_record'
 require 'active_job'
 require 'active_support'
+require 'active_support/core_ext/kernel/reporting'
 require 'fileutils'
 
 DB_PATH = "/tmp/solid_terminator_test_#{Process.pid}.db".freeze

@@ -6,7 +6,6 @@ AllCops:
   TargetRubyVersion: 3.1
   Exclude:
     - "vendor/**/*"
-    - "bin/**/*"
     - "lib/generators/**/templates/**/*"
 
 Style/Documentation:
@@ -18,8 +17,4 @@ Metrics/BlockLength:
 
 RSpec/ExampleLength:
   Max: 20
-
-Lint/InheritException:
-  Exclude:
-    - 'lib/solid_terminator/job_cancelled.rb'
 

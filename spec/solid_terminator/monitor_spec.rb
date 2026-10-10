@@ -131,33 +131,39 @@ RSpec.describe SolidTerminator::Monitor do
   end
 
   describe 'retries termination if job swallows the exception and continues running' do
-    it 'raises again on the next poll until the job stops' do # rubocop:disable RSpec/ExampleLength
-      job_id      = 'stubborn-job'
-      barrier     = Queue.new
-      raise_count = 0
+    let(:job_id) { 'stubborn-job' }
 
-      target = Thread.new do
-        SolidTerminator::ThreadRegistry.register(job_id)
+    # Swallows the first JobTerminated, lets the second one end the thread; the value is the raise count.
+    let(:stubborn_job) do
+      # Read the let before spawning: RSpec holds the memoization lock until this block returns.
+      id      = job_id
+      barrier = Queue.new
+      thread = Thread.new do
+        raise_count = 0
+        SolidTerminator::ThreadRegistry.register(id)
         barrier.push(:ready)
         loop do
           sleep(1)
         rescue SolidTerminator::JobTerminated
           raise_count += 1
-          raise if raise_count >= 2 # propagate on the second hit
+          raise if raise_count >= 2
         end
       rescue SolidTerminator::JobTerminated
-        nil
+        raise_count
       end
-
       barrier.pop
+      thread
+    end
+
+    it 'raises again on the next poll until the job stops' do
+      stubborn_job
       SolidTerminator::Termination.create!(active_job_id: job_id)
       monitor.start
-      target.join(2)
 
-      expect(raise_count).to be >= 2
+      expect(stubborn_job.join(2)&.value).to be >= 2
     ensure
-      target&.kill
-      SolidTerminator::ThreadRegistry.deregister('stubborn-job')
+      stubborn_job.kill
+      SolidTerminator::ThreadRegistry.deregister(job_id)
     end
   end
 
