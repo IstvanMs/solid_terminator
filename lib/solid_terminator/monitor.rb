@@ -70,16 +70,10 @@ module SolidTerminator
     end
 
     def signal_termination(termination)
-      thread = ThreadRegistry.thread_for(termination.active_job_id)
-      return if thread.nil?
-
-      return clean_stale_entry(termination) unless thread.alive?
-
-      logger.info("Raising termination on job #{termination.active_job_id}")
-      begin
-        thread.raise(JobTerminated, "Job #{termination.active_job_id} terminated")
-      rescue ThreadError
-        logger.warn("Thread for job #{termination.active_job_id} died before signal; will retry next poll")
+      job_id = termination.active_job_id
+      case ThreadRegistry.raise_in(job_id, JobTerminated, "Job #{job_id} terminated")
+      when :raised then logger.info("Raised termination on job #{job_id}")
+      when :dead   then clean_stale_entry(termination)
       end
       # Row stays: job's ensure deletes it on clean exit; if the job swallows the exception
       # the row persists so the monitor retries next poll rather than silently giving up.

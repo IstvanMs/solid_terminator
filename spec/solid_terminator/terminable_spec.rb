@@ -76,6 +76,43 @@ RSpec.describe SolidTerminator::Terminable do
     end
   end
 
+  context 'when the monitor raises just as the finished job deregisters' do
+    let!(:sq_job) do
+      SolidQueue::Job.create!(
+        active_job_id: job_id,
+        class_name: 'TerminableTestJob',
+        queue_name: 'default',
+        priority: 0
+      )
+    end
+
+    before do
+      SolidTerminator::Termination.create!(active_job_id: job_id)
+      # Simulates the monitor signalling between the job's work ending and deregister taking the lock.
+      allow(SolidTerminator::ThreadRegistry).to receive(:deregister).and_wrap_original do |original, *args|
+        Thread.new(Thread.current) { |job_thread| job_thread.raise(SolidTerminator::JobTerminated, 'late') }.join
+        original.call(*args)
+      end
+      job.perform_now
+    end
+
+    it 'still deregisters the job' do
+      expect(SolidTerminator::ThreadRegistry.thread_for(job_id)).to be_nil
+    end
+
+    it 'still deletes the termination row' do
+      expect(SolidTerminator::Termination.exists?(active_job_id: job_id)).to be(false)
+    end
+
+    it 'treats the job as completed, not terminated' do
+      expect(SolidQueue::TerminatedExecution.exists?(job_id: sq_job.id)).to be(false)
+    end
+
+    it 'runs after_perform callbacks' do
+      expect(job.after_performed).to be(true)
+    end
+  end
+
   describe 'termination row cleanup' do
     it 'deletes termination row after normal completion' do
       SolidTerminator::Termination.create!(active_job_id: job_id)
