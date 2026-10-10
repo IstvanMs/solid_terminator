@@ -101,6 +101,12 @@ RSpec.describe SolidQueue::ClaimedExecution do
       expect(SolidTerminator::Termination.exists?(active_job_id: active_job.job_id)).to be(false)
     end
 
+    it 'can still be retried after SolidQueue clears the finished job' do
+      SolidQueue::Job.where(id: sq_job.id).delete_all
+      SolidQueue::TerminatedExecution.find_by!(job_id: sq_job.id).retry
+      expect(SolidQueue::Job.where(active_job_id: active_job.job_id).count).to eq(1)
+    end
+
     it 'unblocks the next job under the same concurrency limit' do
       blocked = SolidQueue::Job.find_by!(active_job_id: blocked_job.job_id)
       expect(SolidQueue::ReadyExecution.exists?(job_id: blocked.id)).to be(true)

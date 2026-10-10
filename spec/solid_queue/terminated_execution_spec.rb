@@ -13,7 +13,8 @@ RSpec.describe SolidQueue::TerminatedExecution do
       active_job_id: active_job_id,
       class_name: 'FakeJob',
       queue_name: 'critical',
-      priority: 5
+      priority: 5,
+      arguments: { 'job_class' => 'FakeJob', 'arguments' => [1] }
     )
   end
 
@@ -40,6 +41,10 @@ RSpec.describe SolidQueue::TerminatedExecution do
 
     it 'stores the priority' do
       expect(record.priority).to eq(5)
+    end
+
+    it 'stores the job arguments' do
+      expect(record.arguments).to eq('job_class' => 'FakeJob', 'arguments' => [1])
     end
 
     it 'records terminated_at' do
@@ -94,6 +99,15 @@ RSpec.describe SolidQueue::TerminatedExecution do
     it 'enqueues a new job' do
       expect { terminated.retry }
         .to change { ActiveJob::Base.queue_adapter.enqueued_jobs.size }.by(1)
+    end
+
+    context 'when SolidQueue has already cleared the finished job' do
+      before { SolidQueue::Job.where(id: terminated.job_id).delete_all }
+
+      it 'still enqueues a new job' do
+        expect { terminated.retry }
+          .to change { ActiveJob::Base.queue_adapter.enqueued_jobs.size }.by(1)
+      end
     end
   end
 end

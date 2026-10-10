@@ -31,6 +31,7 @@ ActiveRecord::Schema.define do
     t.string   :queue_name,    null: false
     t.datetime :terminated_at, null: false
     t.datetime :created_at,    null: false
+    t.text     :arguments
   end
   add_index :solid_queue_terminated_executions, :job_id, unique: true
 end

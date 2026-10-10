@@ -29,7 +29,11 @@ ActiveRecord::Migration.verbose = false
 load File.join(Gem.loaded_specs['solid_queue'].full_gem_path,
                'lib/generators/solid_queue/install/templates/db/queue_schema.rb')
 
-Dir[File.expand_path('../lib/generators/solid_terminator/templates/create_*.rb', __dir__)].each do |template|
+%w[
+  create_solid_queue_terminations
+  create_solid_queue_terminated_executions
+  add_arguments_to_solid_queue_terminated_executions
+].map { |name| File.expand_path("../lib/generators/solid_terminator/templates/#{name}.rb", __dir__) }.each do |template|
   rendered = File.join(Dir.tmpdir, "#{Process.pid}_#{File.basename(template)}")
   File.write(rendered, ERB.new(File.read(template)).result_with_hash(
                          migration_version: "[#{ActiveRecord::Migration.current_version}]"

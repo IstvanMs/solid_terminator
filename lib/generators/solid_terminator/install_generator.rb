@@ -27,6 +27,10 @@ module SolidTerminator
         migration_template \
           'create_solid_queue_terminated_executions.rb',
           File.join(target_migrations_dir, 'create_solid_queue_terminated_executions.rb')
+
+        migration_template \
+          'add_arguments_to_solid_queue_terminated_executions.rb',
+          File.join(target_migrations_dir, 'add_arguments_to_solid_queue_terminated_executions.rb')
       end
 
       def create_initializer
