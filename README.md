@@ -159,6 +159,8 @@ SolidQueue::Job.where(class_name: 'MyJob').pluck(:active_job_id)
 
 When a job is terminated, SolidTerminator writes a `SolidQueue::TerminatedExecution` record so you have a queryable audit trail.
 
+> **Note:** SolidQueue has no "terminated" state, so it records a terminated job as **finished**, the same as a job that succeeded. Mission Control and `SolidQueue::Job.finished` include terminated jobs. Use `SolidQueue::TerminatedExecution` to tell them apart.
+
 ### Query
 
 ```ruby
