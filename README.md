@@ -64,11 +64,13 @@ The generator creates two tables:
 
 ### Upgrading from 0.1
 
-Re-run the generator with `--skip` to copy only the new migration, then run migrations as above:
+Run the update generator to copy only the migrations your app is missing, then run migrations as above:
 
 ```bash
-bin/rails generate solid_terminator:install --skip
+bin/rails generate solid_terminator:update
 ```
+
+It takes the same `--database` option as `install`. Run it after every upgrade; when nothing is missing it does nothing.
 
 The migration adds an `arguments` column to `solid_queue_terminated_executions` and copies it from jobs SolidQueue still has. Terminated executions whose job SolidQueue already cleared cannot be retried.
 

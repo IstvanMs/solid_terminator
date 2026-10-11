@@ -4,13 +4,17 @@
 
 ### Upgrading
 
-Run `bin/rails generate solid_terminator:install --skip` and migrate. This adds the `arguments` column to `solid_queue_terminated_executions`.
+Run `bin/rails generate solid_terminator:update` and migrate. This adds the `arguments` column to `solid_queue_terminated_executions`.
 
 ### Breaking
 
 - Requires a new migration that adds `arguments` to `solid_queue_terminated_executions` (see Upgrading). Until it runs, terminated executions are not recorded.
 - `perform_now` on a terminated job no longer raises `SolidTerminator::JobTerminated`. `Terminable` now handles it with `rescue_from`, so the job returns normally and SolidQueue marks it finished.
 - Removed `SolidTerminator::ClaimedExecutionPatch`. SolidTerminator no longer patches SolidQueue internals.
+
+### Added
+
+- `bin/rails generate solid_terminator:update` copies only the migrations the app is missing, without touching the initializer.
 
 ### Changed
 
