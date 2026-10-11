@@ -8,7 +8,7 @@ Run `bin/rails generate solid_terminator:update` and migrate. This adds the `arg
 
 ### Breaking
 
-- Requires a new migration that adds `arguments` to `solid_queue_terminated_executions` (see Upgrading). Until it runs, terminated executions are not recorded.
+- Requires a new migration that adds `arguments` to `solid_queue_terminated_executions` (see Upgrading). Until it runs, terminated executions are recorded without their arguments and cannot be retried. Workers log an error at startup and on every termination while the migration is missing.
 - `perform_now` on a terminated job no longer raises `SolidTerminator::JobTerminated`. `Terminable` now handles it with `rescue_from`, so the job returns normally and SolidQueue marks it finished.
 - Removed `SolidTerminator::ClaimedExecutionPatch`. SolidTerminator no longer patches SolidQueue internals.
 

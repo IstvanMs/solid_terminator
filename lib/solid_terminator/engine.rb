@@ -11,8 +11,11 @@ module SolidTerminator
 
     config.after_initialize do
       if defined?(SolidQueue)
-        SolidQueue.on_worker_start { SolidTerminator.start_monitor }
-        SolidQueue.on_worker_stop  { SolidTerminator.stop_monitor }
+        SolidQueue.on_worker_start do
+          SolidQueue::TerminatedExecution.log_unless_migrated
+          SolidTerminator.start_monitor
+        end
+        SolidQueue.on_worker_stop { SolidTerminator.stop_monitor }
       end
     end
   end

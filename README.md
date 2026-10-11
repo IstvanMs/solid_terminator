@@ -72,6 +72,8 @@ bin/rails generate solid_terminator:update
 
 It takes the same `--database` option as `install`. Run it after every upgrade; when nothing is missing it does nothing.
 
+Until the migrations run, workers log an error at startup and on every termination that names this command.
+
 The migration adds an `arguments` column to `solid_queue_terminated_executions` and copies it from jobs SolidQueue still has. Terminated executions whose job SolidQueue already cleared cannot be retried.
 
 0.2 also changes behaviour: `perform_now` on a terminated job no longer raises `SolidTerminator::JobTerminated`. See the [changelog](CHANGELOG.md).

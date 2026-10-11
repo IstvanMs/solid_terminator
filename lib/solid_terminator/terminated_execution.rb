@@ -9,9 +9,21 @@ module SolidQueue
 
     scope :ordered, -> { order(terminated_at: :desc) }
 
+    # Without the column, `serialize` keeps arguments as a virtual attribute and saves silently drop them.
+    def self.log_unless_migrated
+      return if table_exists? && column_names.include?('arguments')
+
+      SolidTerminator.configuration.logger.error(
+        'solid_queue_terminated_executions is missing migrations, so terminated jobs cannot be retried. ' \
+        'Run `bin/rails generate solid_terminator:update` and migrate.'
+      )
+    end
+
     def self.record_termination(active_job)
       sq_job = SolidQueue::Job.find_by(active_job_id: active_job.job_id)
       return nil unless sq_job
+
+      log_unless_migrated
 
       create!(job_id: sq_job.id, queue_name: sq_job.queue_name, priority: sq_job.priority,
               arguments: sq_job.arguments, terminated_at: Time.current)

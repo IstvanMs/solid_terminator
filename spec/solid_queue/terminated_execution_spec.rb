@@ -22,6 +22,43 @@ RSpec.describe SolidQueue::TerminatedExecution do
     instance_double(ActiveJob::Base, job_id: active_job_id)
   end
 
+  describe '.log_unless_migrated' do
+    let(:log) { StringIO.new }
+
+    around do |example|
+      original = SolidTerminator.configuration.logger
+      SolidTerminator.configuration.logger = Logger.new(log)
+      example.run
+    ensure
+      SolidTerminator.configuration.logger = original
+    end
+
+    context 'when every migration has run' do
+      it 'logs nothing' do
+        described_class.log_unless_migrated
+        expect(log.string).to be_empty
+      end
+    end
+
+    context 'when the arguments column is missing' do
+      before { allow(described_class).to receive(:column_names).and_return(%w[id job_id]) }
+
+      it 'logs the command that fixes it' do
+        described_class.log_unless_migrated
+        expect(log.string).to include('bin/rails generate solid_terminator:update')
+      end
+    end
+
+    context 'when the table does not exist' do
+      before { allow(described_class).to receive(:table_exists?).and_return(false) }
+
+      it 'logs the command that fixes it' do
+        described_class.log_unless_migrated
+        expect(log.string).to include('bin/rails generate solid_terminator:update')
+      end
+    end
+  end
+
   describe '.record_termination' do
     subject(:record) { described_class.record_termination(fake_active_job) }
 
@@ -59,6 +96,12 @@ RSpec.describe SolidQueue::TerminatedExecution do
     it 'does not raise when creation fails' do
       allow(described_class).to receive(:create!).and_raise(ActiveRecord::RecordInvalid)
       expect { described_class.record_termination(fake_active_job) }.not_to raise_error
+    end
+
+    it 'checks for pending migrations' do
+      allow(described_class).to receive(:log_unless_migrated)
+      record
+      expect(described_class).to have_received(:log_unless_migrated)
     end
 
     it 'returns nil when creation fails' do
