@@ -22,6 +22,21 @@ module SolidTerminator
         @mutex.synchronize { @registry[active_job_id] }
       end
 
+      # Raises under the lock so the job cannot deregister in between and let its pool thread
+      # pick up another job, which would then receive the exception instead.
+      def raise_in(active_job_id, exception_class, message)
+        @mutex.synchronize do
+          thread = @registry[active_job_id]
+          return :not_registered unless thread
+          return :dead unless thread.alive?
+
+          thread.raise(exception_class, message)
+          :raised
+        end
+      rescue ThreadError
+        :dead
+      end
+
       def active_job_ids
         @mutex.synchronize { @registry.keys.dup }
       end

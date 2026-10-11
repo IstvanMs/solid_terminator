@@ -25,22 +25,21 @@ Monitor thread (per worker process, polls every N seconds)
   → Thread#raise(SolidTerminator::JobTerminated)
 
 Job thread
-  → around_perform rescues JobTerminated
-  → ensure block: deregister from ThreadRegistry + DELETE termination row
-  → SolidQueue records a TerminatedExecution
+  → around_perform ensure: deregister from ThreadRegistry + DELETE termination row
+  → rescue_from JobTerminated: record a TerminatedExecution, perform_now returns normally
+  → SolidQueue marks the job finished
 ```
 
 ### Components
 
 | Component | File | Role |
 |-----------|------|------|
-| `Terminable` concern | `lib/solid_terminator/terminable.rb` | `around_perform` hook — register, rescue, deregister |
+| `Terminable` concern | `lib/solid_terminator/terminable.rb` | `around_perform` registers/deregisters; `rescue_from` records termination |
 | `ThreadRegistry` | `lib/solid_terminator/thread_registry.rb` | Process-local `active_job_id → Thread` map |
 | `Monitor` | `lib/solid_terminator/monitor.rb` | Polling thread spawned per worker via `on_worker_start` |
 | `Termination` | `lib/solid_terminator/termination.rb` | AR model for `solid_queue_terminations` table |
 | `TerminatedExecution` | `lib/solid_terminator/terminated_execution.rb` | AR model recording termination history |
 | `JobTerminated` | `lib/solid_terminator/job_terminated.rb` | Exception class raised on target thread |
-| `ClaimedExecutionPatch` | `lib/solid_terminator/claimed_execution_patch.rb` | Hooks into SolidQueue claimed execution lifecycle |
 | `Configuration` | `lib/solid_terminator/configuration.rb` | `polling_interval` and other settings |
 | `Engine` | `lib/solid_terminator/engine.rb` | Rails engine — wires up hooks and migrations |
 | Install generator | `lib/generators/solid_terminator/install_generator.rb` | `rails g solid_terminator:install` |
@@ -105,12 +104,14 @@ Mirrors SolidQueue's own version requirements.
 
 ### CI matrix
 
-| Ruby | Rails |
-|------|-------|
-| 3.1  | 7.1   |
-| 3.2  | 7.2   |
-| 3.3  | 8.0   |
-| 3.4  | 8.1   |
+`.github/workflows/ci.yml` runs every row with `BUNDLE_GEMFILE=gemfiles/ci.gemfile`, which pins versions from env vars.
+
+| Ruby | Rails | SolidQueue | Why |
+|------|-------|------------|-----|
+| 3.1  | 7.1   | 1.0.x      | Oldest supported |
+| 3.2  | 7.2   | 1.4.x      | Last release before 1.5 changed how `ClaimedExecution` finalizes jobs |
+| 3.3  | 8.0   | latest     | |
+| 3.4  | 8.1   | latest     | |
 
 ---
 
@@ -165,7 +166,17 @@ Run all three after every change:
 ```bash
 bundle exec rubocop                      # must report no offenses
 bundle exec rspec                        # must report 0 failures
-bundle exec ruby bin/test_termination    # must print "[job] terminated: ..."
+bundle exec rspec integration            # must report 0 failures
+```
+
+`integration/` runs against the real SolidQueue models in a minimal Rails app. It is a separate
+suite because `spec/spec_helper.rb` defines fake SolidQueue models that clash with the real ones.
+Any change to how a terminated job finishes in SolidQueue needs an integration example.
+
+To reproduce a CI row locally:
+
+```bash
+BUNDLE_GEMFILE=gemfiles/ci.gemfile RAILS_VERSION='~> 8.1.0' SOLID_QUEUE_VERSION='>= 1.5' bundle install
 ```
 
 If RuboCop reports offenses, fix them — do not disable cops unless the offense is a genuine false positive, and document why.
@@ -202,7 +213,7 @@ bundle exec rspec --tag integration
 |------|------------------|
 | `ThreadRegistry` | register, deregister, concurrent access, empty? check |
 | `Monitor` | polls at interval, skips query when registry empty, raises on correct thread, retries if job swallows exception |
-| `Terminable` | rescues `JobTerminated`, deregisters in `ensure` even on other exceptions, does not swallow unrelated exceptions |
+| `Terminable` | handles `JobTerminated` without raising, skips `after_perform`, deregisters in `ensure` even on other exceptions, does not swallow unrelated exceptions |
 | `Termination` model | row created by `terminate!`, row deleted after signal handled |
 | `TerminatedExecution` | record created on successful termination |
 | Integration | full flow: `terminate!` call → job stops, row cleaned up |
@@ -267,6 +278,6 @@ When reviewing a spec file, check for:
 ## Project Conventions
 
 - Ruby style enforced by RuboCop. Config in `.rubocop.yml`.
-- No monkey-patching outside of clearly scoped refinements or the `ClaimedExecutionPatch` module.
+- No monkey-patching. Integrate with SolidQueue and ActiveJob through public APIs and callbacks only.
 - All public API is in `lib/solid_terminator.rb`. Internals live under `lib/solid_terminator/`.
 - Migrations are templates in `lib/generators/solid_terminator/templates/` — not applied directly.

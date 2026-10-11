@@ -7,14 +7,15 @@ module SolidTerminator
     config.to_prepare do
       require 'solid_terminator/termination'
       require 'solid_terminator/terminated_execution'
-      require 'solid_terminator/claimed_execution_patch'
-      SolidQueue::ClaimedExecution.prepend(SolidTerminator::ClaimedExecutionPatch)
     end
 
     config.after_initialize do
       if defined?(SolidQueue)
-        SolidQueue.on_worker_start { SolidTerminator.start_monitor }
-        SolidQueue.on_worker_stop  { SolidTerminator.stop_monitor }
+        SolidQueue.on_worker_start do
+          SolidQueue::TerminatedExecution.log_unless_migrated
+          SolidTerminator.start_monitor
+        end
+        SolidQueue.on_worker_stop { SolidTerminator.stop_monitor }
       end
     end
   end

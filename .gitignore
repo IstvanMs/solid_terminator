@@ -23,3 +23,4 @@ build-iPhoneSimulator/
 /vendor/bundle
 /lib/bundler/man/
 .rvmrc
+/gemfiles/*.lock

@@ -6,33 +6,47 @@ module SolidTerminator
 
     included do
       around_perform :with_termination_handling
+      # rescue_from rather than rescuing in around_perform: perform_now then returns normally, so
+      # SolidQueue marks the job finished, and after_perform callbacks from parent classes do not run.
+      rescue_from(JobTerminated) { |error| handle_job_terminated(error) }
     end
 
     private
 
-    def with_termination_handling
+    # JobTerminated is only delivered while the job's own code runs. During registration and cleanup
+    # it is deferred, so a signal cannot interrupt deregister and leave a stale entry that would make
+    # the monitor raise into the next job on this pool thread.
+    def with_termination_handling(&)
       current_thread = Thread.current
-      st_logger.debug("Job #{job_id} registered for termination monitoring")
-      ThreadRegistry.register(job_id)
-      yield
-    rescue JobTerminated => e
-      on_job_terminated(current_thread, e)
-    ensure
+      Thread.handle_interrupt(JobTerminated => :never) do
+        ThreadRegistry.register(job_id)
+        st_logger.debug("Job #{job_id} registered for termination monitoring")
+        Thread.handle_interrupt(JobTerminated => :immediate, &)
+      ensure
+        finish_termination_handling(current_thread)
+      end
+    end
+
+    def finish_termination_handling(current_thread)
       ThreadRegistry.deregister(job_id, current_thread)
       st_logger.debug("Job #{job_id} deregistered from termination monitoring")
       cleanup_termination_row
+      discard_pending_termination
     end
 
-    def on_job_terminated(current_thread, error)
-      # Deregister before cleanup so the monitor does not re-raise mid-cleanup.
-      ThreadRegistry.deregister(job_id, current_thread)
-      handle_job_terminated(error)
+    # A signal sent just before deregister is still queued. The job is over either way, so drop it
+    # instead of letting it fire after the mask lifts and mark a completed job as terminated.
+    # Unmasking delivers any queued signal; no Thread.pending_interrupt?(JobTerminated) guard
+    # because that call segfaults on Ruby 3.1 while the interrupt is pending.
+    def discard_pending_termination
+      Thread.handle_interrupt(JobTerminated => :immediate) { nil }
+    rescue JobTerminated
+      nil
     end
 
     def handle_job_terminated(error)
       st_logger.info("Job #{job_id} terminated: #{error.message}")
       SolidQueue::TerminatedExecution.record_termination(self)
-      raise
     end
 
     def cleanup_termination_row

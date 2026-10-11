@@ -13,12 +13,50 @@ RSpec.describe SolidQueue::TerminatedExecution do
       active_job_id: active_job_id,
       class_name: 'FakeJob',
       queue_name: 'critical',
-      priority: 5
+      priority: 5,
+      arguments: { 'job_class' => 'FakeJob', 'arguments' => [1] }
     )
   end
 
   let(:fake_active_job) do
     instance_double(ActiveJob::Base, job_id: active_job_id)
+  end
+
+  describe '.log_unless_migrated' do
+    let(:log) { StringIO.new }
+
+    around do |example|
+      original = SolidTerminator.configuration.logger
+      SolidTerminator.configuration.logger = Logger.new(log)
+      example.run
+    ensure
+      SolidTerminator.configuration.logger = original
+    end
+
+    context 'when every migration has run' do
+      it 'logs nothing' do
+        described_class.log_unless_migrated
+        expect(log.string).to be_empty
+      end
+    end
+
+    context 'when the arguments column is missing' do
+      before { allow(described_class).to receive(:column_names).and_return(%w[id job_id]) }
+
+      it 'logs the command that fixes it' do
+        described_class.log_unless_migrated
+        expect(log.string).to include('bin/rails generate solid_terminator:update')
+      end
+    end
+
+    context 'when the table does not exist' do
+      before { allow(described_class).to receive(:table_exists?).and_return(false) }
+
+      it 'logs the command that fixes it' do
+        described_class.log_unless_migrated
+        expect(log.string).to include('bin/rails generate solid_terminator:update')
+      end
+    end
   end
 
   describe '.record_termination' do
@@ -42,6 +80,10 @@ RSpec.describe SolidQueue::TerminatedExecution do
       expect(record.priority).to eq(5)
     end
 
+    it 'stores the job arguments' do
+      expect(record.arguments).to eq('job_class' => 'FakeJob', 'arguments' => [1])
+    end
+
     it 'records terminated_at' do
       expect(record.terminated_at).to be_within(2).of(Time.current)
     end
@@ -54,6 +96,12 @@ RSpec.describe SolidQueue::TerminatedExecution do
     it 'does not raise when creation fails' do
       allow(described_class).to receive(:create!).and_raise(ActiveRecord::RecordInvalid)
       expect { described_class.record_termination(fake_active_job) }.not_to raise_error
+    end
+
+    it 'checks for pending migrations' do
+      allow(described_class).to receive(:log_unless_migrated)
+      record
+      expect(described_class).to have_received(:log_unless_migrated)
     end
 
     it 'returns nil when creation fails' do
@@ -94,6 +142,37 @@ RSpec.describe SolidQueue::TerminatedExecution do
     it 'enqueues a new job' do
       expect { terminated.retry }
         .to change { ActiveJob::Base.queue_adapter.enqueued_jobs.size }.by(1)
+    end
+
+    context 'when SolidQueue has already cleared the finished job' do
+      before { SolidQueue::Job.where(id: terminated.job_id).delete_all }
+
+      it 'still enqueues a new job' do
+        expect { terminated.retry }
+          .to change { ActiveJob::Base.queue_adapter.enqueued_jobs.size }.by(1)
+      end
+    end
+
+    context 'when the arguments were never recorded' do
+      before { terminated.update_column(:arguments, nil) }
+
+      def attempt_retry
+        terminated.retry
+      rescue described_class::NotRetryable
+        nil
+      end
+
+      it 'raises NotRetryable' do
+        expect { terminated.retry }.to raise_error(described_class::NotRetryable, /arguments were not recorded/)
+      end
+
+      it 'keeps the terminated execution record' do
+        expect { attempt_retry }.not_to change(described_class, :count)
+      end
+
+      it 'does not enqueue a job' do
+        expect { attempt_retry }.not_to(change { ActiveJob::Base.queue_adapter.enqueued_jobs.size })
+      end
     end
   end
 end

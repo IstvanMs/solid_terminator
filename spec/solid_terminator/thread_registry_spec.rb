@@ -67,6 +67,54 @@ RSpec.describe SolidTerminator::ThreadRegistry do
     end
   end
 
+  describe '.raise_in' do
+    context 'when the job is registered on a live thread' do
+      let(:ready) { Queue.new }
+      let(:target) do
+        started = ready
+        Thread.new do
+          started.push(:ready)
+          sleep(10)
+        rescue SolidTerminator::JobTerminated => e
+          e
+        end
+      end
+
+      before do
+        described_class.register(job_id, target)
+        ready.pop
+      end
+
+      after do
+        target.kill
+        described_class.deregister(job_id)
+      end
+
+      it 'returns :raised' do
+        expect(described_class.raise_in(job_id, SolidTerminator::JobTerminated, 'stop')).to eq(:raised)
+      end
+
+      it 'raises the exception on that thread' do
+        described_class.raise_in(job_id, SolidTerminator::JobTerminated, 'stop')
+        expect(target.join(2)&.value).to be_a(SolidTerminator::JobTerminated)
+      end
+    end
+
+    context 'when the job is not registered' do
+      it 'returns :not_registered' do
+        expect(described_class.raise_in(job_id, SolidTerminator::JobTerminated, 'stop')).to eq(:not_registered)
+      end
+    end
+
+    context 'when the registered thread is dead' do
+      before { described_class.register(job_id, Thread.new { nil }.tap(&:join)) }
+
+      it 'returns :dead' do
+        expect(described_class.raise_in(job_id, SolidTerminator::JobTerminated, 'stop')).to eq(:dead)
+      end
+    end
+  end
+
   describe '.purge_dead_threads' do
     let(:live) { Thread.new { sleep(10) } }
     let(:dead) { Thread.new { nil }.tap(&:join) }

@@ -19,8 +19,10 @@ Gem::Specification.new do |spec|
 
   spec.require_paths = ['lib']
 
-  spec.add_dependency 'rails',       '>= 7.1'
-  spec.add_dependency 'solid_queue', '>= 1.0'
+  spec.add_dependency 'activejob',    '>= 7.1'
+  spec.add_dependency 'activerecord', '>= 7.1'
+  spec.add_dependency 'railties',     '>= 7.1'
+  spec.add_dependency 'solid_queue',  '>= 1.0'
 
   spec.metadata['rubygems_mfa_required'] = 'true'
   spec.metadata['source_code_uri']       = 'https://github.com/IstvanMs/solid_terminator'

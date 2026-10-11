@@ -36,7 +36,7 @@ Run the install generator:
 bin/rails generate solid_terminator:install
 ```
 
-This copies two migrations and an initializer. Then run migrations.
+This copies three migrations and an initializer. Then run migrations.
 
 **Single-database apps** (SolidQueue shares the main database):
 
@@ -61,6 +61,22 @@ The generator creates two tables:
 |---|---|
 | `solid_queue_terminations` | Termination signal — almost always empty |
 | `solid_queue_terminated_executions` | Audit trail of every terminated job |
+
+### Upgrading from 0.1
+
+Run the update generator to copy only the migrations your app is missing, then run migrations as above:
+
+```bash
+bin/rails generate solid_terminator:update
+```
+
+It takes the same `--database` option as `install`. Run it after every upgrade; when nothing is missing it does nothing.
+
+Until the migrations run, workers log an error at startup and on every termination that names this command.
+
+The migration adds an `arguments` column to `solid_queue_terminated_executions` and copies it from jobs SolidQueue still has. Terminated executions whose job SolidQueue already cleared cannot be retried.
+
+0.2 also changes behaviour: `perform_now` on a terminated job no longer raises `SolidTerminator::JobTerminated`. See the [changelog](CHANGELOG.md).
 
 ## Usage
 
@@ -159,6 +175,8 @@ SolidQueue::Job.where(class_name: 'MyJob').pluck(:active_job_id)
 
 When a job is terminated, SolidTerminator writes a `SolidQueue::TerminatedExecution` record so you have a queryable audit trail.
 
+> **Note:** SolidQueue has no "terminated" state, so it records a terminated job as **finished**, the same as a job that succeeded. Mission Control and `SolidQueue::Job.finished` include terminated jobs. Use `SolidQueue::TerminatedExecution` to tell them apart.
+
 ### Query
 
 ```ruby
@@ -169,7 +187,7 @@ SolidQueue::TerminatedExecution.ordered
 SolidQueue::TerminatedExecution.where(queue_name: 'critical')
 ```
 
-Each record exposes: `job_id`, `queue_name`, `priority`, `terminated_at`.
+Each record exposes: `job_id`, `queue_name`, `priority`, `arguments`, `terminated_at`.
 
 ### Retry a terminated job
 
@@ -179,7 +197,9 @@ Re-enqueue the original job with its original arguments:
 SolidQueue::TerminatedExecution.find_by(job_id: sq_job_id).retry
 ```
 
-This destroys the `TerminatedExecution` record and enqueues a new job in a single transaction.
+This destroys the `TerminatedExecution` record and enqueues a new job in a single transaction. The job's arguments are stored on the `TerminatedExecution`, so retry still works after SolidQueue clears the finished job.
+
+Executions recorded before 0.2.0 whose job was already cleared have no `arguments`. `retry` raises `SolidQueue::TerminatedExecution::NotRetryable` for them. Delete them instead.
 
 ## Configuration
 
@@ -252,7 +272,8 @@ Planned improvements — no particular order:
 
 ```bash
 bundle install
-bundle exec rspec          # run tests
+bundle exec rspec          # run unit tests
+bundle exec rspec integration  # run against real SolidQueue models
 bundle exec rubocop        # lint
 bundle exec rubocop -A     # lint with auto-fix
 ```
