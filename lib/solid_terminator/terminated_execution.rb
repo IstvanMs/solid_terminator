@@ -2,6 +2,8 @@
 
 module SolidQueue
   class TerminatedExecution < SolidQueue::Execution
+    class NotRetryable < StandardError; end
+
     # Copied from the job so retry still works after SolidQueue clears the finished job.
     serialize :arguments, coder: JSON
 
@@ -21,6 +23,12 @@ module SolidQueue
     end
 
     def retry
+      # Rows terminated before 0.2.0 whose job was already cleared got no arguments from the backfill.
+      if arguments.nil?
+        raise NotRetryable, "Cannot retry terminated execution #{id} (job #{job_id}): its arguments were not " \
+                            'recorded. It was terminated before solid_terminator 0.2.0 and its job is gone.'
+      end
+
       active_job = ActiveJob::Base.deserialize(arguments)
       transaction do
         destroy!

@@ -109,5 +109,27 @@ RSpec.describe SolidQueue::TerminatedExecution do
           .to change { ActiveJob::Base.queue_adapter.enqueued_jobs.size }.by(1)
       end
     end
+
+    context 'when the arguments were never recorded' do
+      before { terminated.update_column(:arguments, nil) }
+
+      def attempt_retry
+        terminated.retry
+      rescue described_class::NotRetryable
+        nil
+      end
+
+      it 'raises NotRetryable' do
+        expect { terminated.retry }.to raise_error(described_class::NotRetryable, /arguments were not recorded/)
+      end
+
+      it 'keeps the terminated execution record' do
+        expect { attempt_retry }.not_to change(described_class, :count)
+      end
+
+      it 'does not enqueue a job' do
+        expect { attempt_retry }.not_to(change { ActiveJob::Base.queue_adapter.enqueued_jobs.size })
+      end
+    end
   end
 end

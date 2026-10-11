@@ -20,6 +20,7 @@ Run `bin/rails generate solid_terminator:install --skip` and migrate. This adds 
 
 - `NameError: undefined local variable or method 'unblock_next_job'` raised after every job on solid_queue >= 1.5.0.
 - `SolidQueue::TerminatedExecution#retry` failed once SolidQueue cleared the finished job (immediately with `preserve_finished_jobs = false`, otherwise after `clear_finished_jobs_after`). The job's arguments are now stored on the terminated execution.
+- `SolidQueue::TerminatedExecution#retry` raised `NoMethodError: undefined method '[]' for nil` on executions recorded before 0.2.0 whose job was already cleared. It now raises `SolidQueue::TerminatedExecution::NotRetryable` with an explanation.
 - A termination could hit the wrong job: if the targeted job finished just as the monitor signalled it, `JobTerminated` could land in the next job on the same worker thread, or interrupt cleanup and leave a stale registry entry that kept signalling that thread. The monitor now raises under the registry lock, and `Terminable` only accepts the signal while the job's own code runs.
 
 ## [0.1.0] - 2026-06-06

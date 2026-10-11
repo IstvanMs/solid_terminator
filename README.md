@@ -195,6 +195,8 @@ SolidQueue::TerminatedExecution.find_by(job_id: sq_job_id).retry
 
 This destroys the `TerminatedExecution` record and enqueues a new job in a single transaction. The job's arguments are stored on the `TerminatedExecution`, so retry still works after SolidQueue clears the finished job.
 
+Executions recorded before 0.2.0 whose job was already cleared have no `arguments`. `retry` raises `SolidQueue::TerminatedExecution::NotRetryable` for them. Delete them instead.
+
 ## Configuration
 
 The generator creates `config/initializers/solid_terminator.rb` with all available options:
